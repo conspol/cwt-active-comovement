@@ -6,6 +6,7 @@ from itertools import product
 from numbers import Number
 from pathlib import Path
 from typing import List, Dict, Tuple, Any, Union
+from scipy.optimize import curve_fit
 
 import blosc
 import dill as pickle
@@ -15,8 +16,8 @@ import redis.exceptions
 import yaml
 from loguru import logger as lg
 from tqdm import tqdm
+import powerlaw
 
-import statistics
 from constants import *
 from trackedcell import TrackedCell
 
@@ -87,6 +88,31 @@ def all_samples_gen(
     for (ct_, tr_), popul in popul_gen(cells):
         for sample_ in popul['samples']:
             yield (ct_, tr_), sample_
+
+
+def msd_calc(r):
+    shifts = np.arange(len(r))
+    msds = np.zeros(shifts.size)
+
+    for i, shift in enumerate(shifts):
+        diffs = r[:-shift if shift else None] - r[shift:]
+        sqdist = np.square(diffs).sum(axis=1)
+        msds[i] = sqdist.mean()
+
+    return msds
+
+
+def get_msd(grp):
+    msd = pd.DataFrame()
+
+    for i_, grp_ in tqdm(grp):
+        if len(grp_) > 1:
+            mm = pd.Series(msd_calc(np.array([grp_.x, grp_.y]).T), name=i_)
+            msd = pd.concat([msd, mm], axis=1)
+        else:
+            print("The track is too short to calculate MSD!")
+
+    return msd
 
 
 def get_aic(loglikeli_sum, n_params):
@@ -688,55 +714,6 @@ def save_cells_summary_separate(
                 )
 
 
-def get_full_analysis(
-        tc,
-        savefilepath=None,
-        turn_method='error-radius',
-):
-    """
-    Either loads the file from `savefilepath` or analyses the data using statistics.process
-    """
-    if savefilepath is None:
-        analysis_file = Path('out', 'processed_' + tc.name + '.pkl')
-    else:
-        analysis_file = Path(savefilepath)
-
-    if analysis_file.exists():
-        lg.debug(f"Loading analysis result from [{analysis_file}] ...")
-        with open(analysis_file, 'rb') as f:
-            analysis = pickle.load(f)
-
-        if type(analysis) is list:
-            ret_dict = {
-                'ddf_turn_ang': analysis[0],
-                'rks_dict': analysis[1],
-                'rks_ord': analysis[2],
-                'fit_dict': analysis[3],
-                'fit_dict_t': analysis[4],
-                'feat_df': analysis[5]
-            }
-            analysis = ret_dict
-
-    else:
-        lg.debug(f"Analysing data from [{tc.name}] ...")
-
-        ixs = pd.IndexSlice
-
-        if tc.imatch is None:
-            tc.df_lys_analysis = tc.df_lys.copy()
-        else:
-            tc.df_lys_analysis = \
-                tc.df_lys.loc[ixs[np.unique(tc.imatch[0]) + 1, :], :].copy()
-
-        analysis = statistics.process(
-            tc.df_lys_analysis,
-            savefilepath=analysis_file,
-            turn_method=turn_method,
-        )
-
-    return analysis
-
-
 def split_monosummary(
         summary_path,
         in_fileformat='pkl',
@@ -801,7 +778,6 @@ def load_batch(
         process_data=False,
         savefile4parsed_data=None,
         do_msd=True,
-        do_statistics=True,
         out_dir='out',
 ):
     cells = {}
@@ -920,14 +896,11 @@ def load_batch(
                                         df_ = df_.rename(columns={'posx': 'x', 'posy': 'y'})
                                         grp_ = df_.groupby('id')
                                         lg.debug(f"Calculating MSD for [{cname_}] ...")
-                                        sample_['analysis']['msd'] = statistics.get_msd(grp_)
+                                        sample_['analysis']['msd'] = get_msd(grp_)
 
                                         with open(savefile_msd, 'wb+') as fmsd:
                                             lg.debug(f"Saving MSD data to [{savefile_msd}] ...")
                                             pickle.dump(sample_['analysis']['msd'], fmsd)
-
-                                if do_statistics:
-                                    sample_['analysis'] = get_full_analysis(sample_['tc'])
 
                             cells[d_['celltype']][tr_]['samples'].append(sample_)
 
@@ -935,6 +908,16 @@ def load_batch(
                             lg.warning(f"Sample id={regex_grps[0]} is not in the dataset; skipping.")
 
     return cells
+
+
+def get_data_ccdf(data):
+    xs = list(sorted(set(data)))
+    num_elements = [data.count(num_el) for num_el in xs]
+    ccdf_notnorm = []
+    for i, v in enumerate(num_elements):
+        ccdf_notnorm.append(np.cumsum(num_elements[i:])[-1])
+    ccdf = [float(x) / ccdf_notnorm[0] for x in ccdf_notnorm]
+    return xs, ccdf
 
 
 def get_singlecell_cdf_df(
@@ -956,7 +939,7 @@ def get_singlecell_cdf_df(
             data_ = cell_['analysis']['ddf_turn_ang'][120]['res'][data_type]
 
             df_cdf_dict[(ct_, tr_, cell_['id'])] = pd.DataFrame(
-                statistics.get_data_ccdf(data_.to_list())
+                get_data_ccdf(data_.to_list())
             ).T
 
             df_data_dict[(ct_, tr_, cell_['id'])] = data_
@@ -992,7 +975,7 @@ def get_summary_cdf_df(
             )
 
         df_cdf_dict[(ct_, tr_)] = pd.DataFrame(
-            statistics.get_data_ccdf(ldata)
+            get_data_ccdf(ldata)
         ).T
 
         df_data_dict[(ct_, tr_)] = ldata
@@ -1052,7 +1035,7 @@ def get_act_cdf_df(
                     ldata.extend(cell_['analysis'][data_type])
 
             df_cdf_dict[(ct, tr)] = pd.DataFrame(
-                statistics.get_data_ccdf(ldata)
+                get_data_ccdf(ldata)
             ).T
 
             data_dict[(ct, tr)] = ldata
@@ -1065,7 +1048,7 @@ def get_act_cdf_df(
                         ldata.extend(cell_['analysis'][data_type + '_np'])
 
                 df_cdf_dict[(ct, tr + '_np')] = pd.DataFrame(
-                    statistics.get_data_ccdf(ldata)
+                    get_data_ccdf(ldata)
                 ).T
 
                 data_dict[(ct, tr + '_np')] = ldata
@@ -1073,6 +1056,31 @@ def get_act_cdf_df(
     df_cdf = pd.concat(df_cdf_dict)
 
     return df_cdf, data_dict
+
+
+def fit_longtail(
+        data,
+        xmin=None,
+        float_precision=6,
+):
+    data_np = np.array(data)
+
+    if data_np.dtype == np.float:
+        data_np = np.around(data_np, decimals=float_precision)
+
+    if xmin is None:
+        xmin = data_np.min() - 1e-12
+    elif xmin == 0:
+        xmin = np.unique(data_np[data_np > 0]).min()
+
+    data_np = np.delete(data_np, np.where(data_np < xmin))
+
+    plfit = powerlaw.Fit(data_np, xmin=xmin, discrete=False)
+    plfit.power_law.loglikelihood = plfit.power_law.loglikelihoods(data_np).sum()
+    plfit.power_law.parameter1_name = 'alpha'
+    plfit.power_law.parameter1 = plfit.alpha
+
+    return plfit
 
 
 def fit_data(cells):
@@ -1092,7 +1100,7 @@ def fit_data(cells):
             for an_, data_ in ddata.items():
                 if ('run_' in an_) or ('flight_' in an_):
                     dfits[an_] = {}
-                    dfits[an_]['fitobj'] = statistics.fit_longtail(
+                    dfits[an_]['fitobj'] = fit_longtail(
                         data_, xmin=np.min(data_))
 
             cells[ct_][tr_]['fits'] = dfits
@@ -1140,6 +1148,14 @@ def collect_samples_msds(popul):
             popul['samples_' + msdkey][id_] = popul[msdkey].loc[:, id_].mean(axis=1)
 
 
+def fit_msd(timedata, msddata):
+    def func2fit(x, d, a):
+        return 4 * d * (x ** a)
+
+    values, cov = curve_fit(func2fit, timedata, msddata)
+    return values, cov
+
+
 def get_nocomov_msd_fits(
         popul,
         fitlims=(2, 20),
@@ -1153,7 +1169,7 @@ def get_nocomov_msd_fits(
     popul[f'msd{NOCOMOV_SUFFIX}_ds'] = {}
     for i_, g_ in nocomov_msd.groupby(level=0, axis=1):
         msd_ = g_.iloc[fitlims[0]:fitlims[1]].mean(axis=1)
-        fit_ = statistics.fit_msd(
+        fit_ = fit_msd(
             msd_.index.values / FPS,
             msd_.values,
             )[0]
@@ -1183,7 +1199,7 @@ def fit_msd_each_cell_from_raw(
     for (ct, tr), sample in tqdm(all_samples_gen(cells)):
         msd = sample['analysis']['msd'].loc[:, sample['id']]
         msdmean = msd.iloc[fitlims[0]:fitlims[1]].mean(axis=1)
-        sample['analysis']['msd_fit'] = statistics.fit_msd(
+        sample['analysis']['msd_fit'] = fit_msd(
             msdmean.index.values / FPS,
             msdmean.values,
             )
@@ -1195,7 +1211,7 @@ def fit_msd_each_cell_from_raw(
             ids = tc.df_lys.index.get_level_values(0).unique()
             comov_ids = ids[np.unique(tc.imatch[0])]
             msdmean = msd.loc[:, comov_ids].iloc[fitlims[0]:fitlims[1]].mean(axis=1)
-            sample['analysis'][f'msd{COMOV_SUFFIX}_fit'] = statistics.fit_msd(
+            sample['analysis'][f'msd{COMOV_SUFFIX}_fit'] = fit_msd(
                 msdmean.index.values / FPS,
                 msdmean.values,
                 )
@@ -1218,7 +1234,7 @@ def fit_msd_each_cell_from_anal_summary(
                 msd_ = popul['samples_'+msdkey][sample['id']]
                 msd_ = msd_.iloc[fitlims[0]:fitlims[1]]
 
-                sample['analysis'][msdkey+'_fit'] = statistics.fit_msd(
+                sample['analysis'][msdkey+'_fit'] = fit_msd(
                     msd_.index.values / FPS,
                     msd_.values,
                     )
@@ -1236,7 +1252,7 @@ def fit_msd_population(
     for _, popul in popul_gen(cells):
         msd = popul['msd']
         msdmean = msd.iloc[fitlims[0]:fitlims[1]].mean(axis=1)
-        popul['msd_fit'] = statistics.fit_msd(
+        popul['msd_fit'] = fit_msd(
             msdmean.index.values / FPS,
             msdmean.values,
             )
@@ -1244,7 +1260,7 @@ def fit_msd_population(
         if 'msd' + COMOV_SUFFIX in popul.keys():
             msd = popul['msd' + COMOV_SUFFIX]
             msdmean = msd.iloc[fitlims[0]:fitlims[1]].mean(axis=1)
-            popul[f'msd{COMOV_SUFFIX}_fit'] = statistics.fit_msd(
+            popul[f'msd{COMOV_SUFFIX}_fit'] = fit_msd(
                 msdmean.index.values / FPS,
                 msdmean.values,
                 )
@@ -1445,7 +1461,6 @@ def get_msd_df(cells):
         idx_, popul = pgo_
 
         pmeans = popul['means']
-        pstds = popul['stds']
 
         pdict = {}
         for k, v in pmeans.items():
