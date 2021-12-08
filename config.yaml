@@ -1,0 +1,29 @@
+savefile4parsed_data:
+  'parsed_data.csv'
+
+
+dataset:
+  - celltype: 'mcf10a'
+    treatments:
+      - treatment: '80-20'
+        dir:
+          'Path\to\csv\files'
+
+      - treatment: 'nonp'
+        dir:
+          'Path\to\csv\files'
+
+      - treatment: 'tmanp'
+        dir:
+          'Path\to\csv\files'
+
+
+  - celltype: 'mda231'
+    treatments:
+      - treatment: '80-20'
+        dir:
+          'Path\to\csv\files'
+
+      - treatment: 'nonp'
+        dir:
+          'Path\to\csv\files'
