@@ -5,6 +5,7 @@ from loguru import logger as lg
 from numba import jit
 from numba.np.extensions import cross2d
 from scipy.io import loadmat
+from pathlib import Path
 
 from constants import *
 
@@ -268,29 +269,27 @@ class TrackedCell:
             lys_wav_path=None,
             np_wav_path=None,
     ):
-        if lys_wav_path is None:
-            lys_wav_path = Path('wavelet-data') \
-                .joinpath(self.name + '_lys.mat')
-        if np_wav_path is None:
-            np_wav_path = Path('wavelet-data') \
-                .joinpath(self.name + '_np.mat')
+        if lys_wav_path is None or np_wav_path is None:
+            lg.debug(f"Calculating CWT ...")
 
-        lg.debug(f"Loading wavelets for lysosome tracks "
-                 f"from: \n [{lys_wav_path}] ...")
-        ll = loadmat(lys_wav_path)
-        lg.debug(f"Loading wavelets for nanoparticle tracks "
-                 f"from: \n [{np_wav_path}] ...")
-        nn = loadmat(np_wav_path)
 
-        self.wav_lys = {
-            'x': ll['lwavx'][:, 0],
-            'y': ll['lwavy'][:, 0],
-        }
+        else:
+            lg.debug(f"Loading wavelets for lysosome tracks "
+                     f"from: \n [{lys_wav_path}] ...")
+            ll = loadmat(lys_wav_path)
+            lg.debug(f"Loading wavelets for nanoparticle tracks "
+                     f"from: \n [{np_wav_path}] ...")
+            nn = loadmat(np_wav_path)
 
-        self.wav_np = {
-            'x': nn['nwavx'][:, 0],
-            'y': nn['nwavy'][:, 0],
-        }
+            self.wav_lys = {
+                'x': ll['lwavx'][:, 0],
+                'y': ll['lwavy'][:, 0],
+            }
+
+            self.wav_np = {
+                'x': nn['nwavx'][:, 0],
+                'y': nn['nwavy'][:, 0],
+            }
 
     def correlate_wavelets(
             self,
