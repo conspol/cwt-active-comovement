@@ -272,7 +272,6 @@ class TrackedCell:
         if lys_wav_path is None or np_wav_path is None:
             lg.debug(f"Calculating CWT ...")
 
-
         else:
             lg.debug(f"Loading wavelets for lysosome tracks "
                      f"from: \n [{lys_wav_path}] ...")
