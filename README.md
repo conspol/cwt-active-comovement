@@ -32,11 +32,11 @@ On the GUI page, upload .csv file with your data following this format:
 The columns (with names) shown here are mandatory, additional columns might be present, but are not used.
 `posx` stands for x-coordinate (consecutive in time), `posy` for y-coordinate, `id` for track id (consecutive, starting from 1).
 To detect co-movement among two types of objects, ids of objects of type 1 are followed by ids of objects of type 2, 
-as shown in the table above. 
+as shown in the table above. Parameters for data processing are pre-set and can be changed in the code.
 
 Keep in mind that the plots are interactive. Hovering your mouse above the plot will show the data point values. 
 Clicking on the point from the co-moving pairs plot will show the corresponding objects' trajectories, animated in time.
 
-The code is a good starting point for your own projects. Most data processing is in the `process_data` function, 
+The example code is a good starting point for your own projects. Most data processing is in the `process_data` function, 
 and the pipeline can be expanded using routines from `dataprep.py`. The biggest part of the code is dash-based GUI; more 
 GUI plotting functions are in `layout_utils.py`.
