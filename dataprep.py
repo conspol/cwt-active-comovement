@@ -499,8 +499,8 @@ def make_active_t_data(
                     ls.extend(lstore[i_])
                     ts.extend(tstore[i_])
 
-            sample['analysis'][stype + '_l_np'] = ls
-            sample['analysis'][stype + '_t_np'] = ts
+            sample['analysis'][stype + '_l' + COMOV_SUFFIX] = ls
+            sample['analysis'][stype + '_t' + COMOV_SUFFIX] = ts
 
 
 def load_separate_summary_files(
@@ -895,7 +895,7 @@ def load_batch(
                                         df_ = sample_['tc'].df_lys
                                         df_ = df_.rename(columns={'posx': 'x', 'posy': 'y'})
                                         grp_ = df_.groupby('id')
-                                        lg.debug(f"Calculating MSD for [{cname_}] ...")
+                                        lg.debug(f"calculating msd for [{cname_}] ...")
                                         sample_['analysis']['msd'] = get_msd(grp_)
 
                                         with open(savefile_msd, 'wb+') as fmsd:
@@ -1045,13 +1045,13 @@ def get_act_cdf_df(
 
                 if tr in cells[ct]:
                     for cell_ in cells[ct][tr]['samples']:
-                        ldata.extend(cell_['analysis'][data_type + '_np'])
+                        ldata.extend(cell_['analysis'][data_type + COMOV_SUFFIX])
 
-                df_cdf_dict[(ct, tr + '_np')] = pd.DataFrame(
+                df_cdf_dict[(ct, tr + COMOV_SUFFIX)] = pd.DataFrame(
                     get_data_ccdf(ldata)
                 ).T
 
-                data_dict[(ct, tr + '_np')] = ldata
+                data_dict[(ct, tr + COMOV_SUFFIX)] = ldata
 
     df_cdf = pd.concat(df_cdf_dict)
 
@@ -1163,7 +1163,8 @@ def get_nocomov_msd_fits(
     if not ('has_comov' in popul and popul['has_comov']):
         return
 
-    nocomov_cols = popul['msd'].columns.difference(popul['msd_np'].columns)
+    nocomov_cols = popul['msd'].columns.difference(
+                        popul['msd'+COMOV_SUFFIX].columns)
     nocomov_msd = popul['msd'].loc[:, nocomov_cols]
     popul[f'msd{NOCOMOV_SUFFIX}_as'] = {}
     popul[f'msd{NOCOMOV_SUFFIX}_ds'] = {}

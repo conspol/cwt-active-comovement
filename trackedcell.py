@@ -1,11 +1,15 @@
+import re
+from pathlib import Path
+
 import chardet
+import dill as pickle
 import numpy as np
 import pandas as pd
 from loguru import logger as lg
 from numba import jit
 from numba.np.extensions import cross2d
 from scipy.io import loadmat
-from pathlib import Path
+from tqdm import tqdm
 
 from constants import *
 
@@ -51,7 +55,10 @@ def window_minmax_jit(x):
 
 
 @jit(cache=True)
-def haar_cwt_jit(x, scale):
+def haar_cwt_jit(
+        x: np.ndarray,
+        scale,
+):
     n = int(scale / 2)
     l = len(x)
     coeffs = np.zeros(l)
@@ -67,14 +74,14 @@ def haar_cwt_jit(x, scale):
 
 @jit(cache=True)
 def cwt_jit(
-        track,
+        track: np.ndarray,
         minscale=1,
         maxscale=50,
 ):
     out = np.empty((maxscale, len(track)))
 
     for scale in range(minscale, maxscale + 1):
-        out[scale] = haar_cwt_jit(track, scale)
+        out[scale-1] = haar_cwt_jit(track, scale)
 
     return out
 
@@ -99,17 +106,22 @@ class TrackedCell:
     def __init__(
             self,
             name,
-            filepath,
+            filepath=None,
+            df=None,
             lys_wav_path=None,
             np_wav_path=None,
             corr_thr=0.7,
             dist_thr=1,
             has_nps=True,
+            minscale=1,
+            maxscale=50,
+            find_processed=True,
     ):
         self.name = name
         lg.info(f"Processing cell named {self.name}")
         self.cor_dists_file = Path('out').joinpath(self.name + '.pkl')
         self.cor_dists_file.parent.mkdir(exist_ok=True, parents=False)
+        self.find_processed = find_processed
 
         self.lys_wav_path = lys_wav_path
         self.np_wav_path = np_wav_path
@@ -126,13 +138,17 @@ class TrackedCell:
         self.active_flight_se = None
         self.active_flight_i = None
 
-        with open(filepath, 'rb') as f:
-            fchar = chardet.detect(f.readline())
-            lg.debug(f"Found file: \n[{filepath}]")
-            lg.debug(f"Encoding is {fchar['encoding']}")
+        if filepath is None:
+            self.df = df
+        else:
+            with open(filepath, 'rb') as f:
+                fchar = chardet.detect(f.readline())
+                lg.debug(f"Found file: \n[{filepath}]")
+                lg.debug(f"Encoding is {fchar['encoding']}")
 
-        lg.debug(f"Loading tracks into pd.DataFrame ...")
-        self.df = pd.read_csv(filepath, encoding=fchar['encoding'])
+            lg.debug(f"Loading tracks into pd.DataFrame ...")
+            self.df = pd.read_csv(filepath, encoding=fchar['encoding'])
+
         lg.debug(f"Columns: \n {self.df.columns}")
         lg.debug(f"DataFrame preview: \n {self.df}")
 
@@ -154,7 +170,10 @@ class TrackedCell:
         }
         self.df['itime'] = self.df.time.map(dtimemap)
 
-        self.wvscale = list(range(1, 51))
+        self.wvscale = list(range(minscale, maxscale + 1))
+        self.min_wv_scale = minscale
+        self.max_wv_scale = maxscale
+
         self.cor = {
             'x': [],
             'y': [],
@@ -182,7 +201,7 @@ class TrackedCell:
         self.highcor = None
         self.lowdist = None
 
-        if self.cor_dists_file.is_file():
+        if self.cor_dists_file.is_file() and find_processed:
             lg.debug(f"Found file with calculated params of trajectories;\n"
                      f"loading [{self.cor_dists_file}]")
             self.load_pairwise_params_file()
@@ -271,6 +290,18 @@ class TrackedCell:
     ):
         if lys_wav_path is None or np_wav_path is None:
             lg.debug(f"Calculating CWT ...")
+            self.wav_lys = {'x': [], 'y': []}
+            self.wav_np = {'x': [], 'y': []}
+            minscale = self.min_wv_scale
+            maxscale = self.max_wv_scale
+
+            for id_, g_ in self.df_lys.groupby('id'):
+                self.wav_lys['x'].append(cwt_jit(g_.posx.values, minscale, maxscale))
+                self.wav_lys['y'].append(cwt_jit(g_.posy.values, minscale, maxscale))
+
+            for id_, g_ in self.df_np.groupby('id'):
+                self.wav_np['x'].append(cwt_jit(g_.posx.values, minscale, maxscale))
+                self.wav_np['y'].append(cwt_jit(g_.posy.values, minscale, maxscale))
 
         else:
             lg.debug(f"Loading wavelets for lysosome tracks "
@@ -325,7 +356,7 @@ class TrackedCell:
             'y': np.zeros(mtx_shape),
         }
 
-        if self.cor_dists_file.is_file():
+        if self.cor_dists_file.is_file() and self.find_processed:
             lg.debug(f"Found file with calculated pairwise params of trajectories;\n"
                      f"loading [{self.cor_dists_file}]")
             with open(self.cor_dists_file, 'rb') as f:
