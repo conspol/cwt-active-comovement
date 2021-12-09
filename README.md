@@ -30,6 +30,7 @@ On the GUI page, upload .csv file with your data following this format:
 | ... |      |      |     |   |
 
 The columns (with names) shown here are mandatory, additional columns might be present, but are not used.
+`posx` stands for x-coordinate (consecutive in time), `posy` for y-coordinate, `id` for track id (consecutive, starting from 1).
 To detect co-movement among two types of objects, ids of objects of type 1 are followed by ids of objects of type 2, 
 as shown in the table above. 
 
