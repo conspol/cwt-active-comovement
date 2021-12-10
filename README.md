@@ -14,7 +14,7 @@ The code contains:
 - `dataprep.py`: further data processing, heavy-tailed models fitting and comparison using Akaike weights, MSD calculation and fitting, etc.
 - `layout_utils.py`: plotting routines (including box plots with automated p-value calculation and display of test results in the plot).
 
-More ready-to-use GUI pages and examples of usage are coming soon (the work on refactoring and cleaning the code is ongoing as the toolset is being expanded to include more types of analysis).
+More ready-to-use GUI pages and examples of usage are coming soon (the work on refactoring and cleaning the code is continued as the toolset is being expanded).
 
 ### Usage example – an interactive page
 Example in `frontpage.py` shows the typical workflow, with MSD fitting and detection of co-movement,
