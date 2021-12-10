@@ -5,11 +5,16 @@ This repository contains a workflow for detecting co-movement and active transpo
 The project is an evolving and actively maintained toolset, with a goal to provide academic community 
 (biologists in particular) with a self-contained tool to detect and analyze co-movement and active transport of objects from their tracks.
 
-To install, you should have Python 3.6 or later installed (tested on Python 3.8). 
+To install, you should have Python 3.6 or later (tested on Python 3.8). 
 Run the following command to install the required packages:
 `python3 -m pip install -r requirements.txt`
 
-More ready-to-use GUI pages and examples of usage are coming soon (the work on refactoring and cleaning the code is ongoing as the toolset is being expanded).
+The code contains:
+- `trackedcell.py`: initial data processing, wavelet-based co-movement and active transport detection.
+- `dataprep.py`: further data processing, heavy-tailed models fitting and comparison using Akaike weights, MSD calculation and fitting, etc.
+- `layout_utils.py`: plotting routines (including box plots with automated p-value calculation and display of test results in the plot).
+
+More ready-to-use GUI pages and examples of usage are coming soon (the work on refactoring and cleaning the code is ongoing as the toolset is being expanded to include more types of analysis).
 
 ### Usage example – an interactive page
 Example in `frontpage.py` shows the typical workflow, with MSD fitting and detection of co-movement,
