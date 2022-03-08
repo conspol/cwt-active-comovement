@@ -156,19 +156,16 @@ class TrackedCell:
         clmns_ = [c_.strip().lower().replace('.', '_').replace(' ', '_')
                   for c_ in self.df.columns]
         clmns_ = [c_.replace('position', 'pos') for c_ in clmns_]
+        clmns_ = [c_.replace('pos_', 'pos') for c_ in clmns_]
         self.df.columns = [re.sub(r'_\[.+', '', ll_) for ll_ in clmns_]
 
-        lg.debug(f"Column names were cleaned up: \n {self.df.columns}")
+        if 'track_id' in self.df.columns:
+            self.df.loc[:, 'id'] = self.df.loc[:, 'track_id']
+            self.df = self.df.loc[self.df['id'].notna()].sort_values(
+                by=['id', 'frame']).reset_index(drop=True)
+            self.df.loc[:, 'id'] = self.df.loc[:, 'id'].astype(int)
 
-        # Make time indexes from timestamps.
-        utime = self.df.time.unique()
-        dtimemap = {
-            tt_: it_ for it_, tt_ in zip(
-                list(range(len(utime))),
-                utime
-            )
-        }
-        self.df['itime'] = self.df.time.map(dtimemap)
+        lg.debug(f"Column names were cleaned up: \n {self.df.columns}")
 
         self.wvscale = list(range(minscale, maxscale + 1))
         self.min_wv_scale = minscale
@@ -207,7 +204,7 @@ class TrackedCell:
             self.load_pairwise_params_file()
 
         else:
-            self.make_split_df(has_nps=self.has_nps)
+            self.has_nps = self.make_split_df(has_nps=self.has_nps)
 
             if self.has_nps:
                 self.correlate_wavelets()
@@ -225,6 +222,27 @@ class TrackedCell:
         """
         Splits DataFrame into lysosome and NP tracks.
         """
+
+        # Make time indexes from timestamps.
+        if 'time' not in self.df.columns:
+            grp_ = self.df.groupby('id')
+            timecols = []
+
+            for idx, g_ in grp_:
+                timecols.append(pd.Series(
+                    pd.date_range(start='1900-01-01', periods=len(g_), freq='5S')))
+
+            self.df.loc[self.df.index, 'time'] = pd.concat(timecols).values
+
+        utime = self.df.time.unique()
+        dtimemap = {
+            tt_: it_ for it_, tt_ in zip(
+                list(range(len(utime))),
+                utime
+            )
+        }
+        self.df['itime'] = self.df.time.map(dtimemap)
+
         if has_nps:
             id1 = self.df.loc[self.df.id == 1].index.values
 
@@ -233,6 +251,11 @@ class TrackedCell:
                 lg.warning(f"There should be exactly one start point "
                            f"for NP objects. Check object IDs.")
 
+            if i_np_id_start[0].shape == (0,):
+                lg.warning(f"There were no tracks found for NPs. Processing only one track type.")
+                has_nps = False
+
+        if has_nps:
             np_id_start = id1[i_np_id_start[0][0] + 1]
 
             tid_lys = self.df.id.iloc[:np_id_start]
@@ -246,11 +269,25 @@ class TrackedCell:
             cols2keep = [
                 'id', 'itime', 'posx', 'posy', 'name', 'time',
             ]
-            self.df_lys = self.df_lys.loc[:, cols2keep]
-            self.df_np = self.df_np.loc[:, cols2keep]
 
-            lg.info(f"There are {self.nlys} lysosome "
-                    f"and {self.nnp} nanoparticle tracks; ")
+            # if 'time' not in self.df_lys.columns:
+            #     for df_ in (self.df_lys, self.df_np):
+            #         grp_ = df_.groupby('id')
+            #         timecols = []
+            #
+            #         for idx, g_ in grp_:
+            #             timecols.append(pd.Series(
+            #                 pd.date_range(start='1900-01-01', periods=len(g_), freq='1S')))
+            #
+            #         df_.loc[df_.index, 'time'] = pd.concat(timecols).values
+
+            for col_ in cols2keep:
+                if col_ not in self.df_lys.columns and col_ == 'name':
+                    self.df_lys.loc[:, col_] = np.nan
+
+            for col_ in cols2keep:
+                if col_ not in self.df_np.columns and col_ == 'name':
+                    self.df_np.loc[:, col_] = np.nan
 
             self.df_lys.loc[:, 'time'] = pd.to_datetime(
                 self.df_lys.time,
@@ -262,16 +299,26 @@ class TrackedCell:
                 format='%M:%S.%f',
             )
 
+            self.df_lys = self.df_lys.loc[:, cols2keep]
+            self.df_np = self.df_np.loc[:, cols2keep]
+
+            lg.info(f"There are {self.nlys} lysosome "
+                    f"and {self.nnp} nanoparticle tracks; ")
+
             self.df_lys.set_index(['id', 'itime'], inplace=True)
             self.df_np.set_index(['id', 'itime'], inplace=True)
 
-        else:
+        if not has_nps:
             self.df_lys = self.df
             self.nlys = self.df_lys.id.max()
 
             cols2keep = [
                 'id', 'itime', 'posx', 'posy', 'name', 'time',
             ]
+            for col_ in cols2keep:
+                if col_ not in self.df_lys.columns and col_ == 'name':
+                    self.df_lys.loc[:, col_] = np.nan
+
             self.df_lys = self.df_lys.loc[:, cols2keep]
 
             lg.info(f"There are {self.nlys} lysosome tracks;")
@@ -282,6 +329,8 @@ class TrackedCell:
             )
 
             self.df_lys.set_index(['id', 'itime'], inplace=True)
+
+        return has_nps
 
     def get_wavelets(
             self,

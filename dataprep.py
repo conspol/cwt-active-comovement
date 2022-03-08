@@ -1123,7 +1123,7 @@ def collect_all_msds(cells):
 
             all_dfs.append(msd_all)
 
-            if tr_ in cells[ct_] and tr_ != 'nonp':
+            if tr_ in cells[ct_] and tr_ != 'nonp' and cell_['tc'].imatch is not None:
                 msd_np = msd_all.iloc[:,
                          np.unique(cell_['tc'].imatch[0])]
                 np_dfs.append(msd_np)
@@ -1131,7 +1131,7 @@ def collect_all_msds(cells):
         msd = pd.concat(all_dfs, axis=1)
         popul['msd'] = msd
 
-        if tr_ in cells[ct_] and tr_ != 'nonp':
+        if tr_ in cells[ct_] and tr_ != 'nonp' and len(np_dfs) > 0:
             popul['has_comov'] = True
             msd_np = pd.concat(np_dfs, axis=1)
             popul['msd' + COMOV_SUFFIX] = msd_np

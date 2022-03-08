@@ -119,6 +119,9 @@ def parse_csv(contents):
     # charcode = chardet.detect(decoded)
 
     df = pd.read_csv(io.StringIO(decoded.decode('unicode_escape')))
+    if df.iloc[0, 0] == 'Label' and pd.isna(df.iloc[2, 0]):
+        df = pd.read_csv(io.StringIO(decoded.decode('unicode_escape')),
+                         skiprows=[1, 2, 3])
 
     return df
 
@@ -203,7 +206,7 @@ def process_data(n_clicks, df, dname):
 
     fit_msd_population(cells)
 
-    return html.Span(f'{cells}')
+    return html.Span(f'Data processed.')
 
 
 @app.callback(
