@@ -5,10 +5,6 @@ This repository contains a workflow for detecting co-movement and active transpo
 If you find the code posted here useful for any work you are going to publish, please cite [our paper where the workflow 
 is published](https://www.mdpi.com/2073-4409/11/2/270/htm): Polev, K.; Kolygina, D.V.; Kandere-Grzybowska, K.; Grzybowski, B.A. Large-Scale, Wavelet-Based Analysis of Lysosomal Trajectories and Co-Movements of Lysosomes with Nanoparticle Cargos. *Cells* __2022__, *11*, 270. https://doi.org/10.3390/cells11020270
 
-
-The project is an evolving and actively maintained toolset, with a goal to provide academic community 
-(biologists in particular) with a self-contained tool to detect and analyze co-movement and active transport of objects from their tracks.
-
 To install, you should have Python 3.6 or later (tested on Python 3.8). 
 Run the following command to install the required packages:
 `python3 -m pip install -r requirements.txt`
